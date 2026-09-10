@@ -12,7 +12,8 @@ Signing in with Pi Network is optional; the metronome works signed out.
 | `app.js` | tap capture and BPM calculation |
 | `config.js` | `BACKEND_URL`, scopes, sandbox detection |
 | `auth.js` | Pi sign-in |
-| `worker/` | Cloudflare Worker that validates Pi access tokens and issues sessions |
+| `payments.js` | the tip payment flow |
+| `worker/` | Cloudflare Worker: validates access tokens, issues sessions, approves and completes payments |
 
 The front end is static and needs no build step. The Worker is separate because
 GitHub Pages serves files only, and the access token has to be validated
@@ -162,6 +163,95 @@ there left those users with no sign-in control and no explanation; clicking it
 now says why it cannot work.
 
 The metronome never waits on any of this.
+
+## Payments
+
+One product, U2A: a **developer tip of 0.01 π**. There is nothing to unlock, so
+nothing to remember — the Worker stays stateless.
+
+```
+Browser                          Worker                       Pi
+   │ await Pi.init(...)             │                          │
+   │ Pi.createPayment({0.01, memo, metadata})                  │
+   │                                │                          │
+   │ onReadyForServerApproval(id)   │                          │
+   ├── POST /payments/approve ─────▶│                          │
+   │   Authorization: Bearer <session>                         │
+   │                                ├─ GET  /v2/payments/:id ─▶│
+   │                                ├─ POST /v2/payments/:id/approve
+   │                                │  Authorization: Key <PI_NETWORK_API_KEY>
+   │  (user signs in the wallet)    │                          │
+   │ onReadyForServerCompletion(id,txid)                       │
+   ├── POST /payments/complete ────▶│                          │
+   │                                ├─ POST /v2/payments/:id/complete
+   │                                │  { txid }                │
+```
+
+`payments` has to be in the scopes at **sign-in**, not at purchase time — the
+SDK refuses a payment from a session that never asked for it.
+
+### What the Worker checks
+
+The client sends only a `paymentId`. Everything else is read back from Pi and
+verified before either call is made, because a tampered client would otherwise
+be free to have a 0.0001 π payment approved as a tip, or to complete somebody
+else's. A payment is refused unless the amount is exactly `PRODUCT_AMOUNT`, the
+`user_uid` matches the caller's session, `metadata.product` is `PRODUCT_ID`, and
+it has not been cancelled. Re-approving or re-completing is treated as success:
+the end state is already correct, and the SDK may retry a callback.
+
+Payment calls authenticate with **our** session token, not the Pi access token.
+The Worker minted that session only after Pi vouched for the user, so it already
+proves the uid — and the access token never has to be kept in the browser.
+
+### Incomplete payments
+
+`onIncompletePaymentFound` fires from *inside* `authenticate()`, when a previous
+payment reached the blockchain but was never completed. Pi blocks all new
+payments until it is cleared, so ignoring it would break tipping permanently
+with no visible cause.
+
+Awkwardly, there is no session at that moment — the sign-in that would create
+one is the call still in flight. So the handler waits for that sign-in and then
+completes the payment, rather than dropping it. A payment with no `txid` never
+reached the chain and needs no completion.
+
+### Late callbacks
+
+The SDK can keep invoking callbacks after a payment has already failed —
+completion may follow a rejected approval. Settling the promise once is not
+enough, because a late callback still runs its side effects: an approval error
+would be overwritten by "Confirming on the blockchain…" and the status line
+would sit there reporting progress that never comes. Late callbacks are made
+inert, not merely ignored.
+
+### The API key
+
+Unlike sign-in, payments **do** need the Pi Server API Key. Approve and complete
+are server-to-server calls authorised with `Key <PI_NETWORK_API_KEY>` — not
+`Bearer`, which is the user's access token and is rejected by these endpoints.
+
+```bash
+cd worker
+npx wrangler secret put PI_NETWORK_API_KEY   # Server API Key, Pi Developer Portal
+npx wrangler deploy
+```
+
+Until it is bound, the payment endpoints return 500 rather than pretending to
+work. `GET /health` reports the state:
+
+```json
+{ "ok": true, "configured": true, "payments": true,
+  "product": "developer-tip", "amount": "0.01" }
+```
+
+The price lives in two places — `PRODUCT.amount` in `config.js` and
+`PRODUCT_AMOUNT` in `worker/wrangler.toml`. Changing one without the other
+rejects every payment, which is the intended failure direction.
+
+A 404 reading the payment almost always means the key belongs to a different
+Portal project rather than that the payment is missing; Testnet and Mainnet are
+separate projects with separate keys.
 
 ## Design
 

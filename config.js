@@ -14,8 +14,29 @@ window.APP_CONFIG = {
   // No trailing slash — paths are appended directly, so one would give "//auth".
   BACKEND_URL: "https://metronome-asc-auth.yao-pi.workers.dev",
 
-  /** Scopes requested at sign-in. Username only: this app identifies, nothing more. */
-  SCOPES: ["username"],
+  /**
+   * Scopes requested at sign-in.
+   *
+   * `payments` is required before createPayment() will work at all — the SDK
+   * rejects a payment from a session that never asked for it, so it has to be
+   * granted at authenticate() time rather than at the moment of purchase.
+   */
+  SCOPES: ["username", "payments"],
+
+  /**
+   * The one thing this app sells: a voluntary tip, U2A.
+   *
+   * Every field here is also enforced by the Worker. The amount in particular
+   * is checked against the payment Pi reports, not against anything the client
+   * sends — a tampered client could otherwise create a 0.0001 π payment and
+   * have it approved as a tip.
+   */
+  PRODUCT: {
+    id: "developer-tip",
+    label: "Tip 0.01 π",
+    amount: 0.01,
+    memo: "Tip for Tap Tempo",
+  },
 
   /**
    * The sandbox flag must match how the app was actually reached, or the SDK

@@ -17,6 +17,8 @@
   --md-sys-color-on-surface: #1D1B20;
   --md-sys-color-surface-variant: #E7E0EC;
   --md-sys-color-on-surface-variant: #49454F;
+  --md-sys-color-tertiary-container: #FFD8E4;
+  --md-sys-color-on-tertiary-container: #31111D;
   --md-sys-color-error: #B3261E;
   --md-sys-color-on-error: #FFFFFF;
   --md-sys-color-outline: #79747E;
@@ -71,6 +73,8 @@
     --md-sys-color-on-surface: #E6E0E9;
     --md-sys-color-surface-variant: #49454F;
     --md-sys-color-on-surface-variant: #CAC4D0;
+    --md-sys-color-tertiary-container: #633B48;
+    --md-sys-color-on-tertiary-container: #FFD8E4;
     --md-sys-color-error: #F2B8B5;
     --md-sys-color-on-error: #601410;
     --md-sys-color-outline: #938F99;
@@ -409,6 +413,72 @@ body {
 .btn.is-busy .btn__spinner { display: block; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Filled button — the tip call to action. */
+.btn--filled {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
+.btn--filled:disabled {
+  background: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent);
+  color: color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
+}
+@media (hover: hover) {
+  .btn--filled:not(:disabled):hover { box-shadow: var(--md-sys-elevation-1); }
+}
+
+/* ==========================================================================
+   Tip card
+   ========================================================================== */
+
+.card--tip {
+  background: var(--md-sys-color-surface-container);
+  display: flex; flex-direction: column; gap: 20px;
+}
+
+.tip__head { display: flex; align-items: center; gap: 16px; }
+
+.tip__icon {
+  flex: none;
+  width: 48px; height: 48px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+  display: grid; place-items: center;
+  font-size: 1.5rem; line-height: 1;
+  /* Optical centring for the pi glyph's descender-less form */
+  padding-bottom: 2px;
+}
+
+.tip__copy { min-width: 0; }
+
+.tip__title {
+  margin: 0;
+  /* title-medium */
+  font-size: 1rem; line-height: 1.5rem; font-weight: 500; letter-spacing: .009375rem;
+  color: var(--md-sys-color-on-surface);
+}
+
+.tip__body {
+  margin: 2px 0 0;
+  /* body-medium */
+  font-size: .875rem; line-height: 1.25rem; letter-spacing: .015625rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.btn--tip { width: 100%; min-height: 48px; }
+
+.tip__status {
+  margin: 0;
+  text-align: center;
+  /* body-small */
+  font-size: .75rem; line-height: 1rem; letter-spacing: .025rem;
+  color: var(--md-sys-color-on-surface-variant);
+  min-height: 1rem;
+}
+
+.tip__status.is-success { color: var(--md-sys-color-primary); }
+.tip__status.is-error   { color: var(--md-sys-color-error); }
 
 /* ==========================================================================
    Snackbar

@@ -213,12 +213,23 @@ function initialisePi() {
 }
 
 /**
- * Required argument to authenticate(). This app takes no payments, so there is
- * nothing to settle — but the SDK calls it, and omitting the argument makes
- * authenticate() itself fail.
+ * Required argument to authenticate(). Pi calls it when a previous payment was
+ * submitted to the blockchain but never completed by us; it must be settled
+ * before a new payment is allowed, so it is never ignored.
+ *
+ * Looked up lazily rather than captured: this fires from inside authenticate(),
+ * and payments.js registers itself while that call is still in flight.
+ * Completing needs a session, which by definition does not exist yet at this
+ * point — payments.js waits for one rather than dropping the payment.
  */
 function onIncompletePaymentFound(payment) {
-  console.warn("Incomplete Pi payment found; this app has no payment flow.", payment);
+  console.warn("Incomplete Pi payment found", payment);
+  const handler = window.PiPayments?.completeIncomplete;
+  if (handler) {
+    handler(payment);
+  } else {
+    console.error("No payment handler registered; payment left incomplete.", payment);
+  }
 }
 
 /** Reject if `promise` has not settled in time. See AUTH_TIMEOUT_MS. */
@@ -318,11 +329,32 @@ const ready = (async function start() {
   await signIn({ automatic: true });
 })();
 
-// Exposed for debugging, and for tests driving the page directly.
+/**
+ * Resolve once a session exists, signing in first if needed.
+ *
+ * Payments depend on this: every payment call carries the session token, and
+ * an incomplete payment reported during authenticate() has to wait for the
+ * sign-in that is still in progress around it.
+ */
+async function requireSession() {
+  if (sessionToken) return sessionToken;
+  await signIn({ automatic: false });
+  if (!sessionToken) throw new Error("Sign in with Pi to continue.");
+  return sessionToken;
+}
+
+// Exposed for debugging, for payments.js, and for tests driving the page.
 window.PiAuth = {
   signIn,
   signOut: clearSession,
   ready,
+  requireSession,
+  initialisePi,
+  snackbar,
+  callBackend,
+  get sessionToken() {
+    return sessionToken;
+  },
   get state() {
     return { status, user, hasSession: Boolean(sessionToken) };
   },

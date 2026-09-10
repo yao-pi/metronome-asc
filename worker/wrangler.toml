@@ -15,11 +15,18 @@ ALLOWED_ORIGINS = "https://yao-pi.github.io,http://localhost:8000"
 # Session lifetime, in seconds.
 SESSION_TTL = "43200"
 
-# SESSION_SECRET is a secret, never put it here:
-#   npx wrangler secret put SESSION_SECRET
+# The single product this app sells. Both are enforced against the payment Pi
+# reports, so changing the price here without changing config.js in the front
+# end will reject every payment.
+PRODUCT_ID = "developer-tip"
+PRODUCT_AMOUNT = "0.01"
+
+# Secrets, never put here:
+#   npx wrangler secret put SESSION_SECRET      # HMAC key for our sessions
+#   npx wrangler secret put PI_NETWORK_API_KEY  # Server API Key, Pi Developer Portal
 #
-# There is deliberately no PI_API_KEY. Validating an access token against
-# /v2/me uses the user's own Bearer token, not a Server API Key.
+# Only payments need the Server API Key. Sign-in validates an access token
+# against /v2/me with the user's own Bearer token and needs no key at all.
 
 [observability]
 enabled = true

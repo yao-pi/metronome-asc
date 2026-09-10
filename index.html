@@ -65,6 +65,23 @@
     </button>
   </div>
 
+  <!-- Tip -->
+  <section class="card card--tip">
+    <div class="tip__head">
+      <span class="tip__icon" aria-hidden="true">&#960;</span>
+      <div class="tip__copy">
+        <h2 class="tip__title">Enjoying this?</h2>
+        <p class="tip__body">Send the developer a small thank-you in Pi.</p>
+      </div>
+    </div>
+    <button class="btn btn--filled btn--tip" id="tip-button" type="button">
+      <span class="btn__state"></span>
+      <span class="btn__spinner" aria-hidden="true"></span>
+      <span class="btn__text" id="tip-label">Tip</span>
+    </button>
+    <p class="tip__status" id="tip-status" role="status"></p>
+  </section>
+
 </main>
 
 <div class="snackbar" id="snackbar" role="status" aria-live="polite">
@@ -76,5 +93,8 @@
 <script src="config.js"></script>
 <script src="app.js"></script>
 <script src="auth.js"></script>
+<!-- After auth.js: it registers window.PiPayments, which auth.js looks up
+     lazily when Pi reports an incomplete payment during authenticate(). -->
+<script src="payments.js"></script>
 </body>
 </html>
