@@ -190,6 +190,25 @@ Browser                          Worker                       Pi
 `payments` has to be in the scopes at **sign-in**, not at purchase time — the
 SDK refuses a payment from a session that never asked for it.
 
+### Holding a session is not the same as being authenticated
+
+This distinction caused a real failure — `cannot create a payment without
+"payments" scope` — and it is worth stating plainly. Our session token proves
+only that *our backend* once vouched for this user. `createPayment` needs the
+*SDK* to be authenticated, in this page load, with the payments scope. Two ways
+those come apart:
+
+- A session restored from `sessionStorage` skips `Pi.authenticate()` entirely,
+  so the SDK has never authenticated at all even though the app shows as signed
+  in.
+- A session granted before `payments` was added is still valid, so it restores
+  happily while lacking the one permission that matters.
+
+So payments call `requirePiAuth()` rather than `requireSession()`: it forces a
+real `Pi.authenticate()` unless one has already resolved in this page load.
+Stored sessions also record the scopes they were granted under, and one from a
+different set is discarded rather than restored.
+
 ### What the Worker checks
 
 The client sends only a `paymentId`. Everything else is read back from Pi and

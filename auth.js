@@ -75,6 +75,21 @@ let sessionToken = null;  // signed by our backend, not by Pi
 let inFlight = null;
 
 /**
+ * Whether Pi.authenticate() has resolved in *this* page load.
+ *
+ * Not the same as holding a session. Restoring a session from storage tells
+ * the Pi SDK nothing — it proves only that our backend still honours a token
+ * we minted earlier. createPayment needs the SDK's own authorisation, with the
+ * payments scope, in this page. Without this flag a restored session would sail
+ * past sign-in and then fail with "cannot create a payment without payments
+ * scope", which is exactly what happened.
+ */
+let piAuthenticated = false;
+
+/** Identifies which scopes a stored session was granted under. */
+const SCOPE_KEY = (CONFIG.SCOPES || []).join(",");
+
+/**
  * Whether to *show* the busy state — deliberately not the same as being busy.
  *
  * The automatic attempt runs silently: it can take the full timeout to fail,
@@ -112,7 +127,10 @@ function storeSession(token, who) {
   user = who;
   status = "signed-in";
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token, user: who }));
+    // The scopes are stored alongside so that adding one later invalidates
+    // sessions granted under the old set, instead of silently restoring a
+    // session that lacks the new permission.
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ token, user: who, scopes: SCOPE_KEY }));
   } catch {
     // Private mode or blocked storage: the session still works for this page
     // view, it just will not survive a reload. Not worth failing sign-in over.
@@ -123,6 +141,7 @@ function storeSession(token, who) {
 function clearSession() {
   sessionToken = null;
   user = null;
+  piAuthenticated = false;
   status = PI_AVAILABLE ? "signed-out" : "unavailable";
   try {
     sessionStorage.removeItem(SESSION_KEY);
@@ -170,6 +189,13 @@ async function callBackend(path, { method = "POST", body, token } = {}) {
 async function restoreSession() {
   const stored = readStoredSession();
   if (!stored?.token) return false;
+
+  // A session granted under a different scope set is not usable for whatever
+  // the new scope unlocks. Discard it so the next sign-in asks Pi properly.
+  if (stored.scopes !== SCOPE_KEY) {
+    clearSession();
+    return false;
+  }
 
   try {
     const result = await callBackend("/session", { method: "GET", token: stored.token });
@@ -251,8 +277,10 @@ function withTimeout(promise, ms, message) {
  *   logged and reflected in the button, but not announced: an attempt the user
  *   never asked for should not open the app with an error.
  */
-async function signIn({ automatic = false } = {}) {
-  if (status === "signed-in") return;
+async function signIn({ automatic = false, force = false } = {}) {
+  // `force` re-runs Pi.authenticate even when a session already exists — the
+  // only way to obtain a grant the current one does not carry.
+  if (!force && status === "signed-in") return;
 
   // A click landing on top of the silent automatic attempt joins it rather than
   // racing a second one — and promotes the UI to busy, since now somebody is
@@ -289,6 +317,7 @@ async function signIn({ automatic = false } = {}) {
       );
 
       if (!auth?.accessToken) throw new Error("Pi returned no access token.");
+      piAuthenticated = true;
 
       // Step 3 — the backend validates that token against /v2/me and mints the
       // session. Until it answers, the user is not signed in.
@@ -343,12 +372,34 @@ async function requireSession() {
   return sessionToken;
 }
 
+/**
+ * Stronger than requireSession: guarantees the Pi SDK itself is authenticated
+ * in this page load, with the scopes in CONFIG.SCOPES.
+ *
+ * createPayment needs the SDK's authorisation, not ours. A restored session
+ * satisfies requireSession() while the SDK has never authenticated at all, and
+ * a session granted before `payments` was added satisfies it while lacking the
+ * one permission that matters. Both produce "cannot create a payment without
+ * payments scope" at the moment of purchase, so payments ask for this instead.
+ */
+async function requirePiAuth() {
+  if (piAuthenticated && sessionToken) return sessionToken;
+
+  await signIn({ automatic: false, force: true });
+
+  if (!piAuthenticated || !sessionToken) {
+    throw new Error("Sign in with Pi to continue.");
+  }
+  return sessionToken;
+}
+
 // Exposed for debugging, for payments.js, and for tests driving the page.
 window.PiAuth = {
   signIn,
   signOut: clearSession,
   ready,
   requireSession,
+  requirePiAuth,
   initialisePi,
   snackbar,
   callBackend,

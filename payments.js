@@ -176,9 +176,11 @@ async function tip() {
     // it is before authenticate. Shared promise, so this is a no-op once done.
     await Auth.initialisePi();
 
-    // Also establishes the session the approve/complete calls authenticate
-    // with, and guarantees the payments scope was actually granted.
-    await Auth.requireSession();
+    // requirePiAuth, not requireSession: createPayment needs the *SDK* to be
+    // authenticated with the payments scope in this page load. Merely holding
+    // one of our session tokens is not that, and a session restored from
+    // storage never authenticated the SDK at all.
+    await Auth.requirePiAuth();
 
     await createPayment();
 
