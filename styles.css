@@ -508,6 +508,53 @@ body {
 .snackbar.is-open { opacity: 1; transform: translateY(0); }
 
 /* ==========================================================================
+   Short viewports
+   ==========================================================================
+
+   The Pi Browser's own chrome leaves roughly 600–640px of page height on a
+   phone. At full spacing the tip card began below the fold, and because the
+   layout ends in whitespace after Reset the page looked finished — there was
+   no cue that anything lay below it, so the tip button was simply invisible.
+
+   Tightening the vertical rhythm brings the card's top edge into view. Peeking
+   is the point: a partly visible card is its own invitation to scroll. */
+
+@media (max-height: 740px) {
+  .pane { gap: 16px; }
+  .card--readout { padding: 20px 24px 16px; }
+  .beat-track { margin-top: 12px; }
+  .tap-zone { padding: 0; }
+  .tap-button { width: min(200px, 52vw); }
+  .tap-button__label { font-size: 2.25rem; line-height: 2.75rem; }
+  .card { padding: 20px; }
+  .card--tip { gap: 16px; }
+}
+
+/* Shorter still — small phones in the Pi Browser. Tightened until the whole
+   tip button clears the fold, not merely the top of the card. */
+@media (max-height: 660px) {
+  .pane { gap: 12px; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+  .tap-button { width: min(156px, 42vw); }
+  .tap-button__label { font-size: 1.75rem; line-height: 2rem; letter-spacing: .25rem; text-indent: .25rem; }
+  .tip__icon { width: 40px; height: 40px; font-size: 1.25rem; }
+  .card--readout { padding: 12px 20px 10px; }
+  .card { padding: 16px; }
+  .card--tip { gap: 12px; }
+  .btn--tip { min-height: 44px; }
+  .beat-track { margin-top: 8px; }
+  .readout__value { font-size: 2.75rem; line-height: 3rem; }
+}
+
+/* Very short viewports. Spacing only — the TAP target is the app's primary
+   control and is not shrunk any further to make room for a tip button. */
+@media (max-height: 580px) {
+  .pane { gap: 8px; }
+  .card--readout { padding: 10px 20px 8px; }
+  .card { padding: 14px; }
+  .btn--tip { min-height: 40px; }
+}
+
+/* ==========================================================================
    Reduced motion
    ========================================================================== */
 
