@@ -17,8 +17,12 @@
   --md-sys-color-on-surface: #1D1B20;
   --md-sys-color-surface-variant: #E7E0EC;
   --md-sys-color-on-surface-variant: #49454F;
+  --md-sys-color-error: #B3261E;
+  --md-sys-color-on-error: #FFFFFF;
   --md-sys-color-outline: #79747E;
   --md-sys-color-outline-variant: #CAC4D0;
+  --md-sys-color-inverse-surface: #322F35;
+  --md-sys-color-inverse-on-surface: #F5EFF7;
   --md-sys-color-surface-container-lowest: #FFFFFF;
   --md-sys-color-surface-container-low: #F7F2FA;
   --md-sys-color-surface-container: #F3EDF7;
@@ -67,8 +71,12 @@
     --md-sys-color-on-surface: #E6E0E9;
     --md-sys-color-surface-variant: #49454F;
     --md-sys-color-on-surface-variant: #CAC4D0;
+    --md-sys-color-error: #F2B8B5;
+    --md-sys-color-on-error: #601410;
     --md-sys-color-outline: #938F99;
     --md-sys-color-outline-variant: #49454F;
+    --md-sys-color-inverse-surface: #E6E0E9;
+    --md-sys-color-inverse-on-surface: #322F35;
     --md-sys-color-surface-container-lowest: #0F0D13;
     --md-sys-color-surface-container-low: #1D1B20;
     --md-sys-color-surface-container: #211F26;
@@ -86,6 +94,11 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 html { -webkit-text-size-adjust: 100%; }
+
+/* The UA rule for [hidden] is display:none, but it loses to any author rule
+   that sets display — and .account and .btn both set inline-flex. Without this
+   the account chip and the sign-in button stay on screen with `hidden` set. */
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -134,6 +147,31 @@ body {
   font-size: 1.375rem; line-height: 1.75rem; font-weight: 400; letter-spacing: 0;
   color: var(--md-sys-color-on-surface);
 }
+
+/* Pushes the account chip / sign-in button to the trailing edge. */
+.top-app-bar__trailing {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 8px;
+  min-width: 0;
+}
+
+/* --- Signed-in account chip (M3 assist chip) ---------------------------- */
+
+.account {
+  display: inline-flex; align-items: center; gap: 6px;
+  max-width: 46vw;
+  padding: 6px 12px 6px 8px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  /* label-large */
+  font-size: .875rem; line-height: 1.25rem; font-weight: 500; letter-spacing: .00625rem;
+}
+
+.account__icon { font-size: 20px; flex: none; }
+
+/* A Pi username can be long; the bar must not be pushed out of shape by one. */
+.account__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ==========================================================================
    Layout
@@ -341,6 +379,63 @@ body {
   padding: 10px 12px;
 }
 .btn--text:disabled { color: color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent); }
+
+/* Outlined button — the sign-in affordance. Deliberately not filled: the
+   TAP target is the app's one emphatic control, and a second filled button
+   in the app bar would compete with it. */
+.btn--outlined {
+  color: var(--md-sys-color-primary);
+  border: 1px solid var(--md-sys-color-outline);
+  padding: 8px 16px;
+  min-height: 36px;
+  white-space: nowrap;
+}
+.btn--outlined:disabled {
+  color: color-mix(in srgb, var(--md-sys-color-on-surface) 38%, transparent);
+  border-color: color-mix(in srgb, var(--md-sys-color-on-surface) 12%, transparent);
+}
+
+/* Busy spinner, shown while sign-in is in flight */
+.btn__spinner {
+  display: none;
+  flex: none;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 800ms linear infinite;
+}
+
+.btn.is-busy .btn__spinner { display: block; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ==========================================================================
+   Snackbar
+   ========================================================================== */
+
+.snackbar {
+  position: fixed;
+  left: 16px; right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  margin: 0 auto;
+  max-width: 448px;
+  padding: 14px 16px;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-inverse-surface);
+  color: var(--md-sys-color-inverse-on-surface);
+  box-shadow: var(--md-sys-elevation-3);
+  /* body-medium */
+  font-size: .875rem; line-height: 1.25rem; letter-spacing: .015625rem;
+  opacity: 0;
+  transform: translateY(16px);
+  pointer-events: none;
+  transition: opacity var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized),
+              transform var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-emphasized);
+  z-index: 8;
+}
+
+.snackbar.is-open { opacity: 1; transform: translateY(0); }
 
 /* ==========================================================================
    Reduced motion

@@ -3,14 +3,20 @@
 A tap-tempo metronome. Tap the button in time with the music; the app reads
 back the tempo in BPM.
 
-Three static files, no build step, no dependencies beyond the Google Fonts
-stylesheet.
+Signing in with Pi Network is optional; the metronome works signed out.
 
 | | |
 |---|---|
 | `index.html` | markup |
 | `styles.css` | Material Design 3 tokens: colour, type scale, shape, elevation, motion, state layers |
 | `app.js` | tap capture and BPM calculation |
+| `config.js` | `BACKEND_URL`, scopes, sandbox detection |
+| `auth.js` | Pi sign-in |
+| `worker/` | Cloudflare Worker that validates Pi access tokens and issues sessions |
+
+The front end is static and needs no build step. The Worker is separate because
+GitHub Pages serves files only, and the access token has to be validated
+somewhere the client cannot forge.
 
 ## Run it
 
@@ -18,8 +24,12 @@ stylesheet.
 python3 -m http.server 8000
 ```
 
-Then open <http://localhost:8000>. Opening `index.html` from the filesystem
-works too — nothing here needs a server.
+Then open <http://localhost:8000>. The metronome needs nothing else; sign-in
+additionally needs the Worker (below) and the Pi Browser.
+
+```bash
+cd worker && npm install && npm test
+```
 
 ## How the BPM is measured
 
@@ -53,6 +63,94 @@ Below two taps there is no interval to measure, so the readout shows `--`.
 The button carries an M3 state layer, a ripple, and a pulse ring on each
 captured beat; four dots below the readout cycle to mark the beat. Every
 animation is suppressed under `prefers-reduced-motion`.
+
+## Pi Network sign-in
+
+Sign-in runs automatically on load, and again from the **Sign in with Pi**
+button in the app bar. It requests the `username` scope only.
+
+```
+Browser                          Worker                    Pi
+   │                                │                       │
+   │ await Pi.init({version:"2.0"}) │                       │
+   │ Pi.authenticate(["username"])  │                       │
+   │◀──────── accessToken ──────────┼───────────────────────│
+   │                                │                       │
+   ├── POST /auth {accessToken} ───▶│                       │
+   │                                ├─ GET /v2/me ─────────▶│
+   │                                │  Authorization:       │
+   │                                │  Bearer <accessToken> │
+   │                                │◀──── {uid, username} ─│
+   │◀─── {user, sessionToken} ──────│                       │
+```
+
+Three things about this are deliberate.
+
+**`Pi.init()` is awaited to completion before `authenticate()` is called.** It
+has been synchronous in some SDK builds and Promise-returning in others, so it
+is wrapped in `Promise.resolve()`: a returned promise is adopted and settled
+fully, and a plain `undefined` still yields. Calling `authenticate()` against a
+half-initialised SDK is the failure this avoids.
+
+**The access token is never trusted in the browser.** It is an opaque string,
+and a tampered client can send anything. The Worker resolves it against Pi's
+`/v2/me` and uses *that* uid — anything the client claims about its own
+identity is ignored.
+
+**No Pi Server API Key is involved.** `/v2/me` authenticates with the user's own
+access token as a Bearer credential. This is the difference from a payments
+backend, where `approve` and `complete` are authorised with `Key <API_KEY>` and
+that key must never reach a browser. Here the only secret is `SESSION_SECRET`,
+which is ours, not Pi's.
+
+Sessions are stateless: `base64url(claims).base64url(HMAC-SHA256(claims))`,
+signed with `SESSION_SECRET`. There is no KV binding to look a session up in,
+which also means a session cannot be revoked before it expires — rotating
+`SESSION_SECRET` invalidates all of them at once, and that is the only lever.
+
+### Deploying the Worker
+
+Wrangler needs Node ≥22; if your default is older, select a newer one first.
+
+```bash
+cd worker
+npm install
+npx wrangler secret put SESSION_SECRET    # any long random string
+npx wrangler deploy
+```
+
+Check it came up, then point `BACKEND_URL` in `config.js` at the deployed URL:
+
+```bash
+curl https://metronome-asc-auth.<your-subdomain>.workers.dev/health
+```
+
+`{"ok":true,"configured":true}` means the signing secret is bound;
+`"configured":false` means it is missing. `ALLOWED_ORIGINS` in
+`worker/wrangler.toml` must list the origin the app is served from — an origin
+has no path, so `https://yao-pi.github.io` covers the `/metronome-asc/` subpath.
+
+### Environments
+
+`SANDBOX` is derived from the hostname in `config.js`, never hardcoded. It has
+to match how the app was actually reached, because sandbox mode hands the
+request to a sandbox host frame:
+
+| Reached via | `location.hostname` | `SANDBOX` |
+|---|---|---|
+| Pi Sandbox → your dev server | `localhost` | `true` |
+| Pi Browser → the production URL | `yao-pi.github.io` | `false` |
+
+### Outside the Pi Browser
+
+Loading `sdk.minepi.com/pi-sdk.js` defines `window.Pi` in *any* browser, so its
+presence proves nothing. Outside the Pi Browser there is no host frame to
+answer and `authenticate()` never settles — no error, no rejection. Sign-in is
+therefore raced against a 12-second timeout, after which the button returns to
+its normal state with an explanation. Without it, every visitor to the public
+URL would sit on a disabled "Signing in…" button forever.
+
+The metronome never waits on any of this.
 
 ## Design
 

@@ -17,6 +17,19 @@
 
 <header class="top-app-bar">
   <h1 class="top-app-bar__title">Tap Tempo</h1>
+
+  <div class="top-app-bar__trailing">
+    <span class="account" id="account" hidden>
+      <span class="icon account__icon" aria-hidden="true">account_circle</span>
+      <span class="account__name" id="account-name"></span>
+    </span>
+
+    <button class="btn btn--outlined" id="sign-in-button" type="button" hidden>
+      <span class="btn__state"></span>
+      <span class="btn__spinner" aria-hidden="true"></span>
+      <span class="btn__text" id="sign-in-text">Sign in with Pi</span>
+    </button>
+  </div>
 </header>
 
 <main class="pane">
@@ -54,6 +67,14 @@
 
 </main>
 
+<div class="snackbar" id="snackbar" role="status" aria-live="polite">
+  <span class="snackbar__text" id="snackbar-text"></span>
+</div>
+
+<!-- window.Pi exists only in the Pi Browser; everything below degrades without it. -->
+<script src="https://sdk.minepi.com/pi-sdk.js"></script>
+<script src="config.js"></script>
 <script src="app.js"></script>
+<script src="auth.js"></script>
 </body>
 </html>

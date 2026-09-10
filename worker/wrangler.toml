@@ -1,0 +1,25 @@
+name = "metronome-asc-auth"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# Publishes to https://metronome-asc-auth.<your-subdomain>.workers.dev, which is
+# what ../config.js points BACKEND_URL at. Explicit so the URL cannot silently
+# disappear behind a routes change.
+workers_dev = true
+
+[vars]
+# Origins allowed to call this worker (comma-separated, no trailing slash).
+# An origin has no path, so the GitHub Pages entry covers /metronome-asc/ too.
+ALLOWED_ORIGINS = "https://yao-pi.github.io,http://localhost:8000"
+
+# Session lifetime, in seconds.
+SESSION_TTL = "43200"
+
+# SESSION_SECRET is a secret, never put it here:
+#   npx wrangler secret put SESSION_SECRET
+#
+# There is deliberately no PI_API_KEY. Validating an access token against
+# /v2/me uses the user's own Bearer token, not a Server API Key.
+
+[observability]
+enabled = true
