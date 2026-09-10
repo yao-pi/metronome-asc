@@ -71,23 +71,36 @@ let status = "signed-out";
 let user = null;          // { uid, username }
 let sessionToken = null;  // signed by our backend, not by Pi
 
+/** The attempt currently running, so a click can join it instead of starting a second. */
+let inFlight = null;
+
+/**
+ * Whether to *show* the busy state — deliberately not the same as being busy.
+ *
+ * The automatic attempt runs silently: it can take the full timeout to fail,
+ * and a button greyed out on "Signing in…" for twelve seconds after every page
+ * load reads as a broken control rather than a pending one. Only a sign-in the
+ * user actually asked for reports progress.
+ */
+let showBusy = false;
+
 const PI_AVAILABLE = typeof window.Pi !== "undefined";
 
 function render() {
   const signedIn = status === "signed-in";
-  const busy = status === "signing-in";
 
   el.account.hidden = !signedIn;
   if (signedIn && user) {
     el.accountName.textContent = user.username || user.uid;
   }
 
-  // Nothing to click in a browser without the Pi SDK; hide the button rather
-  // than offer one that can only ever fail.
-  el.signInButton.hidden = signedIn || status === "unavailable";
-  el.signInButton.disabled = busy;
-  el.signInButton.classList.toggle("is-busy", busy);
-  el.signInText.textContent = busy ? "Signing in…" : "Sign in with Pi";
+  // Shown whenever nobody is signed in — including when the SDK is missing.
+  // Hiding it there left browsers that block sdk.minepi.com with no sign-in
+  // control at all and no explanation; clicking now says why it cannot work.
+  el.signInButton.hidden = signedIn;
+  el.signInButton.disabled = showBusy;
+  el.signInButton.classList.toggle("is-busy", showBusy);
+  el.signInText.textContent = showBusy ? "Signing in…" : "Sign in with Pi";
 }
 
 /* --------------------------------------------------------------------------
@@ -228,46 +241,65 @@ function withTimeout(promise, ms, message) {
  *   never asked for should not open the app with an error.
  */
 async function signIn({ automatic = false } = {}) {
-  if (status === "signing-in" || status === "signed-in") return;
+  if (status === "signed-in") return;
+
+  // A click landing on top of the silent automatic attempt joins it rather than
+  // racing a second one — and promotes the UI to busy, since now somebody is
+  // actually waiting on it.
+  if (inFlight) {
+    if (!automatic) { showBusy = true; render(); }
+    return inFlight;
+  }
 
   if (!PI_AVAILABLE) {
     status = "unavailable";
     render();
-    if (!automatic) snackbar("Open this app in the Pi Browser to sign in.");
+    if (!automatic) snackbar("Open this app in the Pi Browser to sign in.", 6000);
     return;
   }
 
   status = "signing-in";
+  showBusy = !automatic;
   render();
 
-  try {
-    // Steps 1 and 2 share one deadline: outside the Pi Browser either can hang
-    // indefinitely, and the user cannot tell which one stalled anyway.
-    const auth = await withTimeout(
-      (async () => {
-        // Step 1 — initialise, and wait for it to finish completely.
-        await initialisePi();
-        // Step 2 — ask Pi for an access token.
-        return window.Pi.authenticate(CONFIG.SCOPES, onIncompletePaymentFound);
-      })(),
-      AUTH_TIMEOUT_MS,
-      "Pi did not respond. Open this app in the Pi Browser to sign in.",
-    );
+  inFlight = (async () => {
+    try {
+      // Steps 1 and 2 share one deadline: outside the Pi Browser either can
+      // hang indefinitely, and the user cannot tell which one stalled anyway.
+      const auth = await withTimeout(
+        (async () => {
+          // Step 1 — initialise, and wait for it to finish completely.
+          await initialisePi();
+          // Step 2 — ask Pi for an access token.
+          return window.Pi.authenticate(CONFIG.SCOPES, onIncompletePaymentFound);
+        })(),
+        AUTH_TIMEOUT_MS,
+        "Pi did not respond. Open this app in the Pi Browser to sign in.",
+      );
 
-    if (!auth?.accessToken) throw new Error("Pi returned no access token.");
+      if (!auth?.accessToken) throw new Error("Pi returned no access token.");
 
-    // Step 3 — the backend validates that token against /v2/me and mints the
-    // session. Until it answers, the user is not signed in.
-    const result = await callBackend("/auth", { body: { accessToken: auth.accessToken } });
+      // Step 3 — the backend validates that token against /v2/me and mints the
+      // session. Until it answers, the user is not signed in.
+      const result = await callBackend("/auth", { body: { accessToken: auth.accessToken } });
 
-    storeSession(result.sessionToken, result.user);
-    snackbar(`Signed in as ${result.user.username || result.user.uid}.`);
-  } catch (error) {
-    status = "signed-out";
-    render();
-    console.error("Pi sign-in failed", error);
-    if (!automatic) snackbar(error?.message || "Sign-in failed. Please try again.", 6000);
-  }
+      storeSession(result.sessionToken, result.user);
+      snackbar(`Signed in as ${result.user.username || result.user.uid}.`);
+    } catch (error) {
+      status = "signed-out";
+      console.error("Pi sign-in failed", error);
+      // Report only what the user asked for. showBusy is the test rather than
+      // `automatic`, so an automatic attempt that a click has since joined
+      // still explains itself.
+      if (showBusy) snackbar(error?.message || "Sign-in failed. Please try again.", 6000);
+    } finally {
+      inFlight = null;
+      showBusy = false;
+      render();
+    }
+  })();
+
+  return inFlight;
 }
 
 /* --------------------------------------------------------------------------

@@ -146,9 +146,20 @@ request to a sandbox host frame:
 Loading `sdk.minepi.com/pi-sdk.js` defines `window.Pi` in *any* browser, so its
 presence proves nothing. Outside the Pi Browser there is no host frame to
 answer and `authenticate()` never settles — no error, no rejection. Sign-in is
-therefore raced against a 12-second timeout, after which the button returns to
-its normal state with an explanation. Without it, every visitor to the public
-URL would sit on a disabled "Signing in…" button forever.
+therefore raced against a 12-second timeout.
+
+That timeout is why the automatic attempt is **silent**. Being busy and *showing*
+busy are tracked separately: the automatic attempt leaves the button reading
+"Sign in with Pi" and clickable, because a control greyed out on "Signing in…"
+for twelve seconds after every page load reads as broken rather than pending.
+Only a sign-in the user asked for reports progress. A click landing on top of a
+silent attempt joins it rather than starting a second, and promotes the button
+to the busy state, since by then somebody is waiting on it.
+
+The button is shown whenever nobody is signed in — including when the SDK is
+missing entirely, as it is in any browser blocking `sdk.minepi.com`. Hiding it
+there left those users with no sign-in control and no explanation; clicking it
+now says why it cannot work.
 
 The metronome never waits on any of this.
 
